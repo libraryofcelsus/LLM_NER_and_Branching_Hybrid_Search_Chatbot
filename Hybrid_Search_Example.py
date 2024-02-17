@@ -354,13 +354,13 @@ Message from %s to %s:""" % (username, bot_name, username, bot_name, username, b
             if print_debug == "True":
                 print(f"Type: {entity['type']}, Value: {entity['value']}, Description: {entity['description']}")
             
-            vector_input = embeddings(expanded_input)
+            vector_input = embeddings(f"{entity['value']}: {entity['description']}")
             conversation_list = list()
             conversation_list.append({'role': 'system', 'content': f"You are {bot_name}. A chatbot with long term memory.  Use your memories to answer the user's inquiries."})
             conversation_list.append({'role': 'assistant', 'content': f"CONVERSATION HISTORY: {con_hist}"})
             conversation_list.append({'role': 'assistant', 'content': f"CHATBOT MEMORIES: "})
             try:
-                hits = client.search(
+                hit_1 = client.search(
                     collection_name=f"Hybrid_Search_Example",
                     query_vector=vector_input,
                     query_filter=Filter(
@@ -373,6 +373,25 @@ Message from %s to %s:""" % (username, bot_name, username, bot_name, username, b
                     ),
                     limit=15
                 )
+                vector_input_2 = embeddings(expanded_input)
+                hit_2 = client.search(
+                    collection_name=f"Hybrid_Search_Example",
+                    query_vector=vector_input_2,
+                    query_filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="user",
+                                match=models.MatchValue(value=f"{user_id}"),
+                            ),
+                            FieldCondition(
+                                key="context",
+                                match=models.MatchText(text=f"{entity}"),
+                            ),
+                        ]
+                    ),
+                    limit=5
+                )
+                hits = hit_1 + hit_2
                 unsorted_table = [(hit.payload['timestring'], hit.payload['context']) for hit in hits]
                 sorted_table = sorted(unsorted_table, key=lambda x: x[0]) 
                 joined_table = "\n".join([f"{context}" for timestring, context in sorted_table])
@@ -400,7 +419,7 @@ Message from %s to %s:""" % (username, bot_name, username, bot_name, username, b
                                     ),
                                     FieldCondition(
                                         key="context",
-                                        match=models.MatchText(text=target_lower),
+                                        match=models.MatchText(text=f"{target_lower}"),
                                     ),
                                 ]
                             ),
