@@ -1,0 +1,15 @@
+{
+    "Open_Ai_Key": "ENTER OPEN AI KEY",
+	"Open_Ai_Model": "gpt-3.5-turbo-0125",
+	"Qdrant_URL": "ENTER QDRANT URL IF NOT USING LOCAL",
+	"Qdrant_API_Key": "ENTER QDRANT API KEY IF NOT USING LOCAL",
+	"Upload_Memories": "True",
+	"Print_Debug": "False",
+	"Username": "USER",
+	"User_Id": "USER_ID",
+	"Bot_Name": "Hybrid_Search_Bot",
+	"Temperature": "0.8",
+	"Top_P": "0.55",
+	"Max_Tokens": "800"
+}
+

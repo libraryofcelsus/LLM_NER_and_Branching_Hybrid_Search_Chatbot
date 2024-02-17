@@ -1,0 +1,10 @@
+openai
+requests
+qdrant_client
+numpy
+PyPDF2
+ebooklib
+bs4
+pytesseract
+sentence_transformers
+pillow
