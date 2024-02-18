@@ -11,26 +11,29 @@ Vector Database: https://github.com/qdrant/qdrant
 
 ### Changelog
 
+- 2/19 Changed PDF reading to use Tesseract
+
 - 2/18 Added CSV output
 
 ## Installation
 
 1. Install Python 3.10.6, Make sure you add it to PATH: https://www.python.org/downloads/release/python-3106/
 2. Install Git: https://git-scm.com/ (Git can be skipped by downloading the repo as a zip file under the green code button)
-3. If using Qdrant Cloud copy their Api key and Url to their respective key in the settings.json.  Qdrant Cloud: https://qdrant.to/cloud
-4. To use a local Qdrant server, first install Docker: https://www.docker.com/
-5. Now run: docker pull qdrant/qdrant:v1.5.1 in CMD
-6. Next run: docker run -p 6333:6333 qdrant/qdrant:v1.5.1
-7. Once the local Qdrant server is running, it should be auto detected by the chatbot.
+3. Install tesseract for OCR: https://github.com/UB-Mannheim/tesseract/wiki Once installed, copy the "Tesseract-OCR" folder from Program Files to the Main Project Folder.  Alternativly you can also install it directly to a folder named "Tesseract-OCR" in the project folder on initial install.
+4. If using Qdrant Cloud copy their Api key and Url to their respective key in the settings.json.  Qdrant Cloud: https://qdrant.to/cloud
+5. To use a local Qdrant server, first install Docker: https://www.docker.com/
+6. Now run: docker pull qdrant/qdrant:v1.5.1 in CMD
+7. Next run: docker run -p 6333:6333 qdrant/qdrant:v1.5.1
+8. Once the local Qdrant server is running, it should be auto detected by the chatbot.
 (See: https://docs.docker.com/desktop/backup-and-restore/ for how to make backups.)
-8. Open CMD as Admin
-9. Run git clone: **git clone https://github.com/libraryofcelsus/NER-and-Hybrid-Search-Ai-Chatbot.git**
-10. Navigate to Project folder: cd PATH_TO_CHATBOT_INSTALL
-11. Create a virtual environment: python -m venv venv
-12. Activate the environment: .\venv\scripts\activate
-13. Install the required packages: pip install -r requirements.txt
-14. Edit settings in "settings.json"
-15. Run "Hybrid_Search_Example.py" to use the chatbot. Run "Extract_Relation_From_File.py" to extract relations from the upload folder.
+9. Open CMD as Admin
+10. Run git clone: **git clone https://github.com/libraryofcelsus/NER-and-Hybrid-Search-Ai-Chatbot.git**
+11. Navigate to Project folder: cd PATH_TO_CHATBOT_INSTALL
+12. Create a virtual environment: python -m venv venv
+13. Activate the environment: .\venv\scripts\activate
+14. Install the required packages: pip install -r requirements.txt
+15. Edit settings in "settings.json"
+16. Run "Hybrid_Search_Example.py" to use the chatbot. Run "Extract_Relation_From_File.py" to extract relations from the upload folder.
 
 ------
 

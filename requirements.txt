@@ -2,7 +2,7 @@ openai
 requests
 qdrant_client
 numpy
-PyPDF2
+PyMuPDF
 ebooklib
 bs4
 pytesseract

@@ -18,7 +18,7 @@ from qdrant_client.http import models
 import numpy as np
 import re
 import traceback
-from PyPDF2 import PdfReader
+import fitz
 from ebooklib import epub
 from bs4 import BeautifulSoup
 import pytesseract

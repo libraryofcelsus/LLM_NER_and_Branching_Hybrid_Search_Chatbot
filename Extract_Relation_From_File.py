@@ -18,7 +18,7 @@ from qdrant_client.http import models
 import numpy as np
 import re
 import traceback
-from PyPDF2 import PdfReader
+import fitz
 from ebooklib import epub
 from bs4 import BeautifulSoup
 import pytesseract
@@ -242,9 +242,19 @@ def chunk_text_from_file(file_path, chunk_size=400, overlap=40):
                 texttemp = file.read().replace('\n', ' ').replace('\r', '')
                 
         elif file_extension == '.pdf':
-            with open(file_path, 'rb') as file:
-                pdf = PdfReader(file)
-                texttemp = " ".join(page.extract_text() for page in pdf.pages)
+            # Convert PDF pages to images
+            pdf_document = fitz.open(file_path)
+            texts = []
+            for page_num in range(len(pdf_document)):
+                page = pdf_document.load_page(page_num)
+                pix = page.get_pixmap()
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+
+                # Use pytesseract to extract text from the image
+                text = pytesseract.image_to_string(img)
+                texts.append(text)
+            texttemp = " ".join(texts)
+
                 
         elif file_extension == '.epub':
             book = epub.read_epub(file_path)
