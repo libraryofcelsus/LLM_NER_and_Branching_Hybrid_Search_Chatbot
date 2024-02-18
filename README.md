@@ -9,6 +9,10 @@ Main Ai Assistant Project: https://github.com/libraryofcelsus/Aetherius_AI_Assis
 
 Vector Database: https://github.com/qdrant/qdrant
 
+### Changelog
+
+- 2/18 Added CSV output
+
 ## Installation
 
 1. Install Python 3.10.6, Make sure you add it to PATH: https://www.python.org/downloads/release/python-3106/

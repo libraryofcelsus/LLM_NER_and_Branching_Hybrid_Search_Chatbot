@@ -3,6 +3,7 @@ import os
 from openai import OpenAI
 import json
 import time
+import csv
 import threading
 import concurrent.futures
 from time import time, sleep
@@ -127,6 +128,25 @@ def gpt_4_extraction_completion(query):
             
 def timestamp_to_datetime(timestamp):
     return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    
+    
+def preprocess_field(field):
+    if isinstance(field, str):
+        return field.replace(',', ';')
+    return field
+
+
+def save_to_csv(data, path, fieldnames):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    file_exists = os.path.isfile(path)
+    
+    with open(path, mode='a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        for row in data:
+            processed_row = {key: preprocess_field(value) for key, value in row.items()}
+            writer.writerow(processed_row)
           
           
 def normalize_entity_value(value):
@@ -176,6 +196,12 @@ def chunk_upload(collection_name, extracted_relations):
         print("\n\nEXTRACTED DATA:")
         print("Entities:", entities)
         print("Relations:", relations)
+        if upload_memories == "True":
+            entities_data = list(entities.values())
+            relations_data = relations
+            save_to_csv(entities_data, f'./logs/{user_id}/{bot_name}/entities.csv', ['type', 'value', 'description'])
+            save_to_csv(relations_data, f'./logs/{user_id}/{bot_name}/relations.csv', ['type', 'source', 'target', 'evidence'])
+        
         for relation in relations:
             try:
                 relation_type = relation['type']
@@ -212,7 +238,8 @@ def chunk_upload(collection_name, extracted_relations):
                 }
 
                 if client:
-                    client.upsert(collection_name=collection_name, points=[PointStruct(id=unique_id, payload=metadata, vector=vector1)])
+                    if upload_memories == "True":
+                        client.upsert(collection_name=collection_name, points=[PointStruct(id=unique_id, payload=metadata, vector=vector1)])
                     if print_debug == "True":
                         print(f"Successfully uploaded relation {relation_type_low} between {source_low} and {target_low}")
             except Exception as e:
@@ -277,9 +304,6 @@ class MainConversation:
         else:
             return None
             
-            
-    
-
     
 if __name__ == '__main__':
     with open('settings.json', 'r', encoding='utf-8') as f:
@@ -371,7 +395,7 @@ Message from %s to %s:""" % (username, bot_name, username, bot_name, username, b
                             ),
                         ]
                     ),
-                    limit=15
+                    limit=8
                 )
                 vector_input_2 = embeddings(expanded_input)
                 hit_2 = client.search(
@@ -389,7 +413,7 @@ Message from %s to %s:""" % (username, bot_name, username, bot_name, username, b
                             ),
                         ]
                     ),
-                    limit=5
+                    limit=10
                 )
                 hits = hit_1 + hit_2
                 unsorted_table = [(hit.payload['timestring'], hit.payload['context']) for hit in hits]
@@ -449,7 +473,7 @@ Message from %s to %s:""" % (username, bot_name, username, bot_name, username, b
 
         memories = remove_duplicate_dicts(memories)
         memory_list = ' '.join(memory['content'] for memory in memories)
-        print(f"\n\n\nRETRIEVED MEMORIES: {memory_list}")
+        print(f"\n\n\nRETRIEVED MEMORIES:\n{memory_list}")
         
         
         conversation_list.append({'role': 'assistant', 'content': f"{memory_list}"})
@@ -459,6 +483,8 @@ Message from %s to %s:""" % (username, bot_name, username, bot_name, username, b
 
         response = gpt_4_completion(conversation_list)
         print(f"\n\n\nFINAL RESPONSE: {response}")
+        
+        main_conversation.append(timestring, username, usernameupper, user_input, bot_name, botnameupper, response)
         conversation_list.clear()
         memories.clear()
         
@@ -490,8 +516,6 @@ Expected output format:
                 pass
             chunk_upload(collection_name, extracted_relations)
 
-            
-       
         print("\n")
         
         

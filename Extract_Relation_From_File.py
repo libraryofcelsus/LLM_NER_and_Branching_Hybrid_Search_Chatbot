@@ -3,6 +3,7 @@ import os
 from openai import OpenAI
 import json
 import time
+import csv
 import threading
 import concurrent.futures
 from time import time, sleep
@@ -26,6 +27,7 @@ from PIL import Image
 from sentence_transformers import SentenceTransformer
 
 
+# Embeddings
 model = SentenceTransformer('all-mpnet-base-v2')
 embed_size = 768
 
@@ -34,6 +36,8 @@ def embeddings(query):
     return vector
 
 
+
+# Connect to Local Server, if not running, connect to API
 def check_local_server_running():
     try:
         response = requests.get("http://localhost:6333/dashboard/")
@@ -41,7 +45,6 @@ def check_local_server_running():
     except requests.ConnectionError:
         return False
 
-# Check if local server is running
 if check_local_server_running():
     client = QdrantClient(url="http://localhost:6333")
 else:
@@ -59,13 +62,17 @@ else:
         print("\n\nQdrant is not started.  Please enter API Keys or run Qdrant Locally.")
         sys.exit()
         
+        
+# Connect to OpenAi with API Key  
 with open('settings.json', 'r', encoding='utf-8') as f:
     settings = json.load(f)
 api_key = settings['Open_Ai_Key']
 
 client2 = OpenAI(api_key=f'{api_key}')
 
-def gpt_4_completion(query):
+
+# GPT Completion Query using Json Parameters.
+def openai_completion(query):
     max_counter = 7
     counter = 0
     with open('settings.json', 'r', encoding='utf-8') as f:
@@ -95,16 +102,13 @@ def gpt_4_completion(query):
             print(f"Retrying with error: {e} in 20 seconds...")
             sleep(20)
             
-            
-def gpt_4_extraction_completion(query):
+# Openai NER Extraction Call
+def openai_extraction_completion(query):
     max_counter = 7
     counter = 0
     with open('settings.json', 'r', encoding='utf-8') as f:
         settings = json.load(f)
-        
-    max_tokens = settings['Max_Tokens']
     openai_model = settings['Open_Ai_Model']
-    
     while True:
         try:
             completion = client2.chat.completions.create(
@@ -129,6 +133,27 @@ def timestamp_to_datetime(timestamp):
     return datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
             
             
+def preprocess_field(field):
+    if isinstance(field, str):
+        return field.replace(',', ';')
+    return field
+
+
+def save_to_csv(data, path, fieldnames):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    file_exists = os.path.isfile(path)
+    
+    with open(path, mode='a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        for row in data:
+            processed_row = {key: preprocess_field(value) for key, value in row.items()}
+            writer.writerow(processed_row)
+
+            
+            
+# Process Files found in Directory based on Type 
 def process_files():
     if not os.path.exists('Upload/TXT'):
         os.makedirs('Upload/TXT')
@@ -155,10 +180,9 @@ def process_files():
             process_files_in_directory('./Upload/PDF', './Upload/PDF/Finished')
             process_files_in_directory('./Upload/EPUB', './Upload/EPUB/Finished')
             process_files_in_directory('./Upload/VIDEOS', './Upload/VIDEOS/Finished')  
-            pass
+            return
         except:
             traceback.print_exc()
-            
             
 def process_files_in_directory(directory_path, finished_directory_path, chunk_size=400, overlap=40):
     try:
@@ -167,11 +191,12 @@ def process_files_in_directory(directory_path, finished_directory_path, chunk_si
         with concurrent.futures.ThreadPoolExecutor() as executor:
             for file in files:
                 executor.submit(process_and_move_file, directory_path, finished_directory_path, file, chunk_size, overlap)
+        return
     except Exception as e:
         print(e)
         traceback.print_exc() 
-        
-        
+          
+# Move File to Finished Folder
 def process_and_move_file(directory_path, finished_directory_path, file, chunk_size, overlap):
     try:
         file_path = os.path.join(directory_path, file)
@@ -182,6 +207,7 @@ def process_and_move_file(directory_path, finished_directory_path, file, chunk_s
         print(e)
         traceback.print_exc()
         
+# Function for splitting Text into Chunks
 def chunk_text(text, chunk_size, overlap):
     chunks = []
     start = 0
@@ -195,6 +221,7 @@ def chunk_text(text, chunk_size, overlap):
     return chunks
         
         
+# Extract Text from File
 def chunk_text_from_file(file_path, chunk_size=400, overlap=40):
     with open('settings.json', 'r', encoding='utf-8') as f:
         settings = json.load(f)
@@ -251,7 +278,6 @@ def chunk_text_from_file(file_path, chunk_size=400, overlap=40):
 
         texttemp = '\n'.join(line for line in texttemp.splitlines() if line.strip())
         chunks = chunk_text(texttemp, chunk_size, overlap)
-        filelist = list()
 
         collection_name = f"Hybrid_Search_Example"
         try:
@@ -262,13 +288,12 @@ def chunk_text_from_file(file_path, chunk_size=400, overlap=40):
             collection_name=collection_name,
             vectors_config=VectorParams(size=embed_size, distance=Distance.COSINE),
         )
-        
         try:
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 futures = []
                 for chunk in chunks:
                     future = executor.submit(
-                        wrapped_chunk_from_file,
+                        summarized_chunk_from_file,
                         chunk, collection_name, bot_name, username, embeddings, client, file_path
                     )
                     futures.append(future)
@@ -277,31 +302,15 @@ def chunk_text_from_file(file_path, chunk_size=400, overlap=40):
                 for future in concurrent.futures.as_completed(futures):
                     results.append(future.result())
 
-                filelist = []
-
         except Exception as e:
             print(f"An error occurred while executing threads: {e}")
             traceback.print_exc()
-
-        table = filelist
-        return table
+        return results
     except Exception as e:
         print(e)
         traceback.print_exc()
-        table = "Error"
-        return table  
+        return
         
-        
-        
-def wrapped_chunk_from_file(chunk, collection_name, bot_name, username, embeddings, client, file_path):
-    try:
-
-        result = summarized_chunk_from_file(chunk, collection_name, bot_name, username, embeddings, client, file_path)
-
-        return result
-    except Exception as e:
-        print(e)
-        traceback.print_exc()
         
         
 def summarized_chunk_from_file(chunk, collection_name, bot_name, username, embeddings, client, file_path):
@@ -314,7 +323,7 @@ def summarized_chunk_from_file(chunk, collection_name, bot_name, username, embed
         filesum.append({'role': 'assistant', 'content': f"SUMMARIZER BOT: Sure! Here is the summarized article based on the scraped text: "})
 
         text = chunk
-        text = gpt_4_completion(filesum)
+        text = openai_completion(filesum)
         if len(text) < 20:
             text = "No File available"
         filecheck = list()
@@ -371,7 +380,7 @@ Expected output format:
 
                 }]
                 extraction.append({'role': 'user', 'content': f"TEXT TO EXTRACT RELATIONS FROM: {text}"})
-                extracted_relations = gpt_4_extraction_completion(extraction)
+                extracted_relations = openai_extraction_completion(extraction)
                 print(extracted_relations)
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     futures = []
@@ -423,19 +432,29 @@ def parse_relations(text):
         relations.append(relation)
     return relations
     
-        
+# Upload Extracted Data to Qdrant and CSV File
 def chunk_upload(file_path, collection_name, extracted_relations):        
     try:
         payload = list()
         timestamp = time()
         timestring = timestamp_to_datetime(timestamp)
 
-                
+        with open('settings.json', 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+        username = settings['Username']
+        user_id = settings['User_Id']
+        bot_name = settings['Bot_Name']
                 
         entities = parse_entities(extracted_relations)
         relations = parse_relations(extracted_relations)
         print("Entities:", entities)
         print("Relations:", relations)
+
+        entities_data = list(entities.values())
+        relations_data = relations
+        save_to_csv(entities_data, f'./logs/{user_id}/{bot_name}/entities.csv', ['type', 'value', 'description'])
+        save_to_csv(relations_data, f'./logs/{user_id}/{bot_name}/relations.csv', ['type', 'source', 'target', 'evidence'])
+        
         for relation in relations:
             try:
                 relation_type = relation['type']
@@ -451,11 +470,8 @@ def chunk_upload(file_path, collection_name, extracted_relations):
                 traceback.print_exc()
         
             try:
-
                 vector1 = embeddings(f"{source_low}\n{relation_type_low}\n{target_low}\n{evidence_low}")
-
                 unique_id = str(uuid4())
-
                 metadata = {
                     'bot': bot_name,
                     'user': user_id,
@@ -471,11 +487,9 @@ def chunk_upload(file_path, collection_name, extracted_relations):
                     'context': evidence_low,
                 }
                  
-                
             except Exception as e:
-                print(f"Error processing relation: {e}")
+                print(f"\n\nError processing relation: {e}")
         
-
             try:
                 client.upsert(collection_name=collection_name, points=[PointStruct(id=unique_id, payload=metadata, vector=vector1)])
                 print(f"Successfully uploaded relation {relation_type_low} between {source_low} and {target_low}")
@@ -483,65 +497,11 @@ def chunk_upload(file_path, collection_name, extracted_relations):
                 print(f"Error uploading to database: {e}")
 
                 traceback.print_exc()
+        return
     except:
         traceback.print_exc()
+
             
-            
-class MainConversation:
-    def __init__(self, username, user_id, bot_name, max_entries, greeting):
-        botnameupper = bot_name.upper()
-        usernameupper = username.upper()
-        self.max_entries = int(max_entries)
-        self.file_path = f'./history/{user_id}/{bot_name}_main_conversation_history.json'
-        self.file_path2 = f'./history/{user_id}/{bot_name}_main_history.json'
-        self.main_conversation = [greeting] 
-        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
-        if os.path.exists(self.file_path):
-            with open(self.file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                self.running_conversation = data.get('running_conversation', [])
-        else:
-            self.running_conversation = []
-            self.save_to_file()
-
-    def append(self, timestring, username, usernameupper, user_input, bot_name, botnameupper, response_two):
-        entry = []
-        entry.append(f"{usernameupper}: [{timestring}] - {user_input}")
-        entry.append(f"{botnameupper}: {response_two}")
-        self.running_conversation.append("\n\n".join(entry))
-        while len(self.running_conversation) > self.max_entries:
-            self.running_conversation.pop(0)
-        self.save_to_file()
-
-    def save_to_file(self):
-        history = self.main_conversation + self.running_conversation
-
-        data_to_save = {
-            'main_conversation': self.main_conversation,
-            'running_conversation': self.running_conversation
-        }
-
-        data_to_save2 = {
-            'history': [{'visible': entry} for entry in history]
-        }
-        with open(self.file_path, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, indent=4)
-        with open(self.file_path2, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save2, f, indent=4)
-
-    def get_conversation_history(self):
-        if not os.path.exists(self.file_path) or not os.path.exists(self.file_path2):
-            self.save_to_file()
-        return self.main_conversation + ["\n\n".join(entry.split("\n\n")) for entry in self.running_conversation]
-        
-    def get_last_entry(self):
-        if self.running_conversation:
-            return self.running_conversation[-1]
-        else:
-            return None
-            
-    
-
     
 if __name__ == '__main__':
     with open('settings.json', 'r', encoding='utf-8') as f:
@@ -560,7 +520,7 @@ if __name__ == '__main__':
 
         if mode_selection == "1":
             process_files()
-            print("Processing complete. Returning to main menu...")
+            print("\n\nProcessing complete. Returning to main menu...")
         elif mode_selection == "2":
             print("Exiting program.")
             break
